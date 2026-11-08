@@ -22,8 +22,13 @@ exports.handler=async ev=>{
   const parts=[{text:P[d.task](d)}];
   if(d.img)parts.push({inline_data:{mime_type:'image/png',data:d.img}});
   if(d.audio)parts.push({inline_data:{mime_type:'audio/wav',data:d.audio}});
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL||'gemini-flash-latest'}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},body:JSON.stringify({contents:[{parts}],generationConfig:{responseMimeType:'application/json'}})});
-  const j=await r.json();
-  if(!r.ok)return E(502,(j.error&&j.error.message)||'Error de Gemini');
+  let r,j,sat=0;
+  for(const m of [process.env.GEMINI_MODEL||'gemini-flash-latest','gemini-flash-lite-latest']){
+    r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},body:JSON.stringify({contents:[{parts}],generationConfig:{responseMimeType:'application/json'}})});
+    j=await r.json();
+    if(r.ok)break;
+    if([429,500,503,504].includes(r.status))sat=1;
+  }
+  if(!r.ok)return E(502,sat?'La IA gratuita está saturada ahora mismo. Inténtalo de nuevo en un minuto.':(j.error&&j.error.message)||'Error de Gemini');
   try{return{statusCode:200,headers:H,body:j.candidates[0].content.parts[0].text}}catch{return E(502,'Respuesta vacía')}
 };
